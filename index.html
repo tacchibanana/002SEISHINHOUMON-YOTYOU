@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>誠心訪問看護ー急変予測APP (Ver.4.6)</title>
+    <style>
+        :root { 
+            --primary: #4a6785; --accent: #e67e22; --danger: #c0392b; --safe: #27ae60; 
+            --bg: #f4f7f6; --card-bg: #ffffff; --text: #2c3e50; --border: #d1d8e0;
+            --input-bg: #ffffff; --tab-inactive: #f8fafb;
+        }
+        body.dark-mode {
+            --bg: #1a1a1a; --card-bg: #2d2d2d; --text: #e0e0e0; --border: #444;
+            --input-bg: #3d3d3d; --tab-inactive: #252525; --primary: #78909c;
+        }
+        body { font-family: sans-serif; background: var(--bg); padding: 10px; color: var(--text); margin: 0; font-size: 14px; transition: background 0.3s; line-height: 1.4; }
+        .card { background: var(--card-bg); border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 480px; margin: auto; overflow: hidden; border: 1px solid var(--border); position: relative; }
+        .header { padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+        .mode-switch { cursor: pointer; padding: 5px 10px; border-radius: 20px; border: 1px solid var(--border); font-size: 0.7rem; background: var(--tab-inactive); }
+        .tab-container { display: flex; background: var(--tab-inactive); padding: 6px; gap: 4px; }
+        .tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; border-radius: 8px; font-weight: bold; font-size: 0.8rem; color: #7f8c8d; }
+        .tab.active { background: var(--primary); color: white; }
+        .content { padding: 15px; }
+        .mode-section { display: none; }
+        .mode-section.active { display: block; }
+        label { display: block; margin-bottom: 4px; font-weight: bold; color: var(--primary); font-size: 0.85rem; }
+        select, input, textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; margin-bottom: 12px; background: var(--input-bg); color: var(--text); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .btn-check { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer; margin-bottom: 8px; }
+        .btn-sub { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 0.9rem; cursor: pointer; margin-bottom: 15px; }
+        .btn-reset { width: 100%; padding: 12px; background: #95a5a6; color: white; border: none; border-radius: 10px; font-size: 0.85rem; cursor: pointer; margin: 40px 0 10px 0; }
+        .result-box { margin-top: 10px; padding: 12px; border-radius: 10px; text-align: center; font-weight: bold; border: 2px solid; }
+        .risk-high { border-color: var(--danger); color: var(--danger); background: #fff5f5; }
+        .risk-mid { border-color: var(--accent); color: #d35400; background: #fffaf0; }
+        .risk-low { border-color: var(--safe); color: var(--safe); background: #f0fdf4; }
+        .output-box { background: var(--tab-inactive); border: 1px solid var(--border); padding: 12px; border-radius: 8px; font-size: 0.85rem; white-space: pre-wrap; margin-bottom: 8px; }
+        .footer-copyright { text-align: center; color: #bdc3c7; font-size: 11px; padding: 15px 0; }
+        .o-selectors select { font-size: 0.8rem; margin-bottom: 8px; }
+        .checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-weight: bold; color: var(--primary); }
+        .checkbox-row input { width: auto; margin: 0; }
+        .copy-done { background: var(--safe) !important; transition: background 0.3s; }
+        #pain-input-area { background: #fff5f5; padding: 10px; border-radius: 8px; border: 1px solid #fab1a0; margin-bottom: 12px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="header">
+        <h1 style="font-size: 1rem;">予兆キャッチャー Pro+ (Ver.4.6)</h1>
+        <div class="mode-switch" onclick="toggleDarkMode()">🌙</div>
+    </div>
+    
+    <div class="tab-container">
+        <div id="tab-qsofa" class="tab active" onclick="switchMode('qsofa')">qSOFA</div>
+        <div id="tab-news" class="tab" onclick="switchMode('news')">NEWS2</div>
+        <div id="tab-soap" class="tab" onclick="switchMode('soap')">報告・記録</div>
+    </div>
+
+    <div class="content">
+        <div id="qsofa-sec" class="mode-section active">
+            <label>緊急症状の確認</label>
+            <select id="q-crit" onchange="checkEmergency()">
+                <option value="none">緊急症状なし</option>
+                <option value="emergency">意識・呼吸なし(心肺停止疑い)</option>
+                <option value="stroke">麻痺・顔のゆがみ等(脳卒中疑い)</option>
+            </select>
+            <div id="emergency-msg" class="result-box risk-high" style="display:none; margin-bottom:15px; text-align:left; font-size:0.85rem;"></div>
+
+            <label>意識レベル (ACVPU)</label>
+            <select id="q-avpu" onchange="syncToNews()">
+                <option value="0">A: 意識清明</option>
+                <option value="1">C: 新たな混乱・混濁</option>
+                <option value="1">V: 呼びかけで反応</option>
+                <option value="1">P: 痛みで反応</option>
+                <option value="1">U: 反応なし</option>
+            </select>
+            <div class="grid-2">
+                <div><label>呼吸数 (≧22)</label><input type="number" id="q-rr" placeholder="回/分" oninput="syncToNews()"></div>
+                <div><label>最高血圧 (≦100)</label><input type="number" id="q-sbp" placeholder="mmHg" oninput="syncToNews()"></div>
+            </div>
+            <button class="btn-check" onclick="calculate('qsofa', 'soap')">判定して、報告作成へ</button>
+            <button class="btn-sub" onclick="calculate('qsofa', 'news')">判定して、NEWS2詳細入力へ</button>
+        </div>
+
+        <div id="news-sec" class="mode-section">
+            <label>SpO2ターゲット設定</label>
+            <select id="n-scale">
+                <option value="1">スケール1 (通常患者: ≧96%)</option>
+                <option value="2">スケール2 (COPD等: 88-92%目標)</option>
+            </select>
+            <div class="grid-2">
+                <div><label>呼吸数</label><input type="number" id="n-rr" placeholder="回/分"></div>
+                <div><label>SpO2 (%)</label><input type="number" id="n-spo2" placeholder="%"></div>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="n-o2"> <label for="n-o2" style="margin:0">酸素投与あり (+2点)</label>
+            </div>
+            <div class="grid-2">
+                <div><label>収縮期血圧</label><input type="number" id="n-sbp" placeholder="mmHg"></div>
+                <div><label>心拍数</label><input type="number" id="hr" placeholder="回/分"></div>
+            </div>
+            <div class="grid-2">
+                <div><label>体温 (℃)</label><input type="number" id="n-bt" step="0.1" placeholder="36.5"></div>
+                <div>
+                    <label>意識 (ACVPU)</label>
+                    <select id="n-avpu">
+                        <option value="0">A: 意識清明</option>
+                        <option value="3">C: 新たな混乱・混濁</option>
+                        <option value="3">V: 呼びかけで反応</option>
+                        <option value="3">P: 痛みで反応</option>
+                        <option value="3">U: 反応なし</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn-check" onclick="calculate('news', 'soap')">NEWS2判定を完了して報告へ</button>
+        </div>
+
+        <div id="soap-sec" class="mode-section">
+            <label>【S】主観的データ</label>
+            <textarea id="s-data" rows="2" placeholder="主訴・訴え"></textarea>
+            
+            <label>【O】客観的データ</label>
+            <div class="o-selectors">
+                <select id="symptom-sel" onchange="handleSymptomChange(this)"><option value="">▼症状 (18項目)</option>
+                    <option value="PAIN">疼痛（部位入力へ）</option>
+                    <option value="胸部圧迫感あり">胸部圧迫感</option><option value="冷汗あり">冷汗</option><option value="顔面蒼白">顔面蒼白</option><option value="末梢冷感">末梢冷感</option><option value="チアノーゼ">チアノーゼ</option><option value="喘鳴あり">喘鳴</option><option value="下顎呼吸">下顎呼吸</option><option value="陥没呼吸">陥没呼吸</option><option value="起座呼吸">起座呼吸</option><option value="浮腫(++)">浮腫</option><option value="頸静脈怒張">頸静脈怒張</option><option value="悪寒・戦慄">悪寒・戦慄</option><option value="活気低下">活気低下</option><option value="食欲不振">食欲不振</option><option value="尿量減少">尿量減少</option><option value="嘔気・嘔吐">嘔気・嘔吐</option><option value="めまい・ふらつき">めまい</option>
+                </select>
+
+                <div id="pain-input-area">
+                    <label style="color:#d63031">疼痛部位を入力してください</label>
+                    <div style="display:flex; gap:5px;">
+                        <input type="text" id="pain-part" placeholder="例：右下腹部、腰部" style="margin-bottom:0">
+                        <button onclick="addPainRecord()" style="padding:0 15px; border-radius:8px; border:none; background:var(--danger); color:white; cursor:pointer;">追加</button>
+                    </div>
+                </div>
+
+                <select onchange="addO('history', this)"><option value="">▼既往 (15項目)</option>
+                    <option value="心不全">心不全</option><option value="虚血性心疾患">虚血性心疾患</option><option value="心房細動">心房細動</option><option value="高血圧">高血圧</option><option value="糖尿病">糖尿病</option><option value="脳梗塞後遺症">脳梗塞後遺症</option><option value="慢性腎不全">慢性腎不全</option><option value="透析中">透析中</option><option value="COPD">COPD</option><option value="間質性肺炎">間質性肺炎</option><option value="気管支喘息">気管支喘息</option><option value="肝硬変">肝硬変</option><option value="担癌状態">担癌状態</option><option value="てんかん">てんかん</option><option value="認知症">認知症</option>
+                </select>
+
+                <select onchange="addO('med', this)"><option value="">▼薬剤 (向精神薬・専門薬 18項目)</option>
+                    <option value="抗精神病薬(リスペリドン/クエチアピン等)">抗精神病薬(リスペリドン/クエチアピン等)</option>
+                    <option value="抗不安薬(ベンゾジアゼピン系等)">抗不安薬(ベンゾジアゼピン系等)</option>
+                    <option value="抗うつ薬(SSRI/SNRI等)">抗うつ薬(SSRI/SNRI等)</option>
+                    <option value="抗てんかん薬/気分安定薬(デパケン等)">抗てんかん薬/気分安定薬</option>
+                    <option value="睡眠導入剤">睡眠導入剤</option>
+                    <option value="抗認知症薬(アリセプト/メマリー等)">抗認知症薬</option>
+                    <option value="L-ドパ製剤(パーキンソン薬)">L-ドパ製剤(パーキンソン薬)</option>
+                    <option value="DOAC/ワーファリン">DOAC/ワーファリン(抗凝固薬)</option>
+                    <option value="抗血小板薬(バイアスピリン等)">抗血小板薬</option>
+                    <option value="Ca拮抗薬/β遮断薬(降圧剤)">Ca拮抗薬/β遮断薬(降圧剤)</option>
+                    <option value="ループ利尿薬(ラシックス等)">利尿薬</option>
+                    <option value="血糖降下薬(DPP-4/SGLT2阻害等)">血糖降下薬</option>
+                    <option value="インスリン(超速効型/持続型)">インスリン(超速効型/持続型)</option>
+                    <option value="ステロイド内服">ステロイド内服</option>
+                    <option value="非ステロイド性抗炎症薬(NSAIDs)">鎮痛剤(NSAIDs等)</option>
+                    <option value="麻薬系鎮痛薬">麻薬系鎮痛薬</option>
+                    <option value="経皮吸収型鎮痛剤(パッチ)">経皮吸収型鎮痛剤(パッチ)</option>
+                    <option value="吸入ステロイド/β刺激薬">吸入ステロイド/β刺激薬</option>
+                </select>
+            </div>
+            <textarea id="o-data" rows="3"></textarea>
+            
+            <label>提言 (Recommendation)</label>
+            <select id="r-data">
+                <option value="至急、受診の必要性について判断を依頼">受診判断を依頼</option>
+                <option value="指示の範囲外であるため、今後の指示を依頼">今後の指示を依頼</option>
+                <option value="緊急性が極めて高く、救急搬送の許可を依頼">救急搬送の許可を依頼</option>
+            </select>
+            <button class="btn-check" style="background: var(--safe); margin-top:10px;" onclick="generate()">報告文・記録を生成</button>
+        </div>
+
+        <div id="statusBox" class="result-box" style="display:none"></div>
+
+        <div id="report-area" style="display:none; margin-top:15px;">
+            <div id="output-sbar" class="output-box"></div>
+            <button class="btn-sub" onclick="copy('output-sbar', this)">SBARをコピー</button>
+            <div id="output-soap" class="output-box"></div>
+            <button class="btn-sub" onclick="copy('output-soap', this)">SOAPをコピー</button>
+        </div>
+
+        <button class="btn-reset" onclick="resetAll()">全ての入力をリセットして初期化</button>
+        
+        <div class="footer-copyright">© 2026 Tacchibanana</div>
+    </div>
+</div>
+
+<script>
+let lastScoreText = ""; let lastRiskMsg = ""; let obsFrequency = ""; let newsDetail = "";
+
+function toggleDarkMode() { document.body.classList.toggle('dark-mode'); }
+
+function switchMode(m) {
+    document.querySelectorAll('.tab, .mode-section').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-'+m).classList.add('active');
+    document.getElementById(m+'-sec').classList.add('active');
+}
+
+function syncToNews() {
+    document.getElementById('n-rr').value = document.getElementById('q-rr').value;
+    document.getElementById('n-sbp').value = document.getElementById('q-sbp').value;
+    document.getElementById('n-avpu').selectedIndex = document.getElementById('q-avpu').selectedIndex;
+}
+
+function handleSymptomChange(sel) {
+    if(sel.value === "PAIN") {
+        document.getElementById('pain-input-area').style.display = 'block';
+        document.getElementById('pain-part').focus();
+    } else if(sel.value !== "") {
+        addO('symptom', sel);
+    }
+}
+
+function addPainRecord() {
+    const part = document.getElementById('pain-part').value || "部位不明";
+    const target = document.getElementById('o-data');
+    target.value += (target.value ? "、" : "") + part + "に疼痛あり";
+    document.getElementById('pain-part').value = "";
+    document.getElementById('pain-input-area').style.display = 'none';
+    document.getElementById('symptom-sel').selectedIndex = 0;
+}
+
+function addO(type, sel) {
+    if(!sel.value) return;
+    const target = document.getElementById('o-data');
+    let text = (type === 'history') ? "既往:" + sel.value : (type === 'med') ? sel.value + "使用あり" : sel.value;
+    target.value += (target.value ? "、" : "") + text;
+    sel.selectedIndex = 0;
+}
+
+function resetAll() {
+    if(!confirm("次の患者さんのアセスメントを開始するため、全ての入力をリセットしますか？")) return;
+    document.querySelectorAll('input').forEach(i => i.value = "");
+    document.querySelectorAll('textarea').forEach(t => t.value = "");
+    document.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
+    document.getElementById('n-o2').checked = false;
+    document.getElementById('statusBox').style.display = 'none';
+    document.getElementById('report-area').style.display = 'none';
+    document.getElementById('pain-input-area').style.display = 'none';
+    switchMode('qsofa');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function checkEmergency() {
+    const crit = document.getElementById('q-crit').value;
+    const msg = document.getElementById('emergency-msg');
+    msg.style.display = (crit !== 'none') ? 'block' : 'none';
+    if(crit === 'stroke') msg.innerHTML = "⚠️ 脳卒中疑い：直ちに救命手配(119番)を優先。";
+    else if(crit === 'emergency') msg.innerHTML = "⚠️ 心肺停止疑い：応援要請・蘇生開始。DNAR等を確認。";
+}
+
+function getNews2Point(type, val, scale, isO2) {
+    if (val === "" || isNaN(val)) return 0;
+    val = parseFloat(val);
+    switch(type) {
+        case 'rr': if (val <= 8 || val >= 25) return 3; if (val >= 21) return 2; if (val <= 11) return 1; return 0;
+        case 'spo2':
+            if (scale === "1") { if (val <= 91) return 3; if (val <= 93) return 2; if (val <= 95) return 1; return 0; }
+            else { if (val <= 83) return 3; if (val <= 85) return 2; if (val <= 87) return 1; if (isO2 && val >= 93) { if (val >= 97) return 3; if (val >= 95) return 2; return 1; } return 0; }
+        case 'sbp': if (val <= 90 || val >= 220) return 3; if (val <= 100) return 2; if (val <= 110) return 1; return 0;
+        case 'hr': if (val <= 40 || val >= 131) return 3; if (val >= 111) return 2; if (val <= 50 || val >= 91) return 1; return 0;
+        case 'bt': if (val <= 35.0) return 3; if (val >= 39.1) return 2; if (val <= 36.0 || val >= 38.1) return 1; return 0;
+        default: return 0;
+    }
+}
+
+function calculate(mode, nextStep) {
+    let score = 0; let riskClass = "risk-low"; let interpretation = ""; let has3 = false;
+    if(mode === 'qsofa') {
+        const rr = parseInt(document.getElementById('q-rr').value) || 0;
+        const sbp = parseInt(document.getElementById('q-sbp').value) || 0;
+        const avpu = parseInt(document.getElementById('q-avpu').value);
+        if(avpu > 0) score++; if(rr >= 22) score++; if(sbp > 0 && sbp <= 100) score++;
+        lastScoreText = `qSOFA判定:${score}点`;
+        interpretation = (score >= 2) ? "重症化リスク高。至急報告。" : "緊急度低〜中。経過観察。";
+        riskClass = (score >= 2) ? "risk-high" : "risk-low";
+        obsFrequency = (score >= 2) ? "最低1時間毎の観察が必要" : "状態に応じ観察継続";
+        newsDetail = `呼吸:${rr}回, BP:${sbp}mmHg, 意識:${document.getElementById('q-avpu').selectedOptions[0].text}`;
+        syncToNews();
+    } else {
+        const scale = document.getElementById('n-scale').value;
+        const isO2 = document.getElementById('n-o2').checked;
+        const rrVal = document.getElementById('n-rr').value;
+        const spo2Val = document.getElementById('n-spo2').value;
+        const sbpVal = document.getElementById('n-sbp').value;
+        const hrVal = document.getElementById('hr').value;
+        const btVal = document.getElementById('n-bt').value;
+        const avpuScore = parseInt(document.getElementById('n-avpu').value);
+        const pRR = getNews2Point('rr', rrVal);
+        const pSpO2 = getNews2Point('spo2', spo2Val, scale, isO2);
+        const pSBP = getNews2Point('sbp', sbpVal);
+        const pHR = getNews2Point('hr', hrVal);
+        const pBT = getNews2Point('bt', btVal);
+        const pO2 = isO2 ? 2 : 0;
+        score = pRR + pSpO2 + pSBP + pHR + pBT + pO2 + avpuScore;
+        if ([pRR, pSpO2, pSBP, pHR, pBT, avpuScore].includes(3)) has3 = true;
+        lastScoreText = `NEWS2スコア:${score}点`;
+        if(score >= 7) { riskClass = "risk-high"; interpretation = "高リスク(緊急対応)"; obsFrequency = "継続的モニタリングが必要"; }
+        else if(score >= 5 || has3) { riskClass = "risk-mid"; interpretation = (has3) ? "低中リスク(3点項目あり)" : "中リスク(早期評価が必要)"; obsFrequency = "最低1時間毎の観察が必要"; }
+        else if(score >= 1) { riskClass = "risk-low"; interpretation = "低リスク"; obsFrequency = "最低4-6時間毎の観察が必要"; }
+        else { riskClass = "risk-low"; interpretation = "0点(安定)"; obsFrequency = "最低12時間毎の観察が必要"; }
+        newsDetail = `呼吸:${rrVal||'-'}回, SpO2:${spo2Val||'-'}%, O2:${isO2?'有':'無'}, BP:${sbpVal||'-'}mmHg, HR:${hrVal||'-'}回, BT:${btVal||'-'}℃, 意識:${document.getElementById('n-avpu').selectedOptions[0].text}`;
+    }
+    lastRiskMsg = interpretation;
+    const box = document.getElementById('statusBox');
+    box.className = 'result-box ' + riskClass;
+    box.innerHTML = `${lastScoreText}<br>${interpretation}<br><small>${obsFrequency}</small>`;
+    box.style.display = 'block';
+    if(nextStep === 'news') switchMode('news'); else if(nextStep === 'soap') switchMode('soap');
+}
+
+function generate() {
+    const s = document.getElementById('s-data').value || "特記なし";
+    const o = document.getElementById('o-data').value || "特記なし";
+    const r = document.getElementById('r-data').value;
+    const crit = document.getElementById('q-crit').value;
+    const emg = (crit !== 'none') ? `【緊急】${document.getElementById('q-crit').selectedOptions[0].text}疑い。` : "";
+    document.getElementById('output-sbar').innerText = `📞 SBAR報告\n【状況】${lastScoreText}。${emg}${s}\n【背景】${o}\n【判断】${lastRiskMsg}。${obsFrequency}\n【提言】${r}`;
+    document.getElementById('output-soap').innerText = `📝 SOAP記録\nS：${s}\nO：${o}。(${newsDetail})。${lastScoreText}。\nA：${emg}${lastRiskMsg}。${obsFrequency}\nP：${r}した。`;
+    document.getElementById('report-area').style.display = 'block';
+    document.getElementById('report-area').scrollIntoView({behavior: 'smooth'});
+}
+
+function copy(id, btn) {
+    navigator.clipboard.writeText(document.getElementById(id).innerText).then(() => {
+        const t = btn.innerText; btn.innerText = "✓ コピー完了";
+        btn.classList.add('copy-done');
+        setTimeout(() => { btn.innerText = t; btn.classList.remove('copy-done'); }, 2000);
+    });
+}
+</script>
+</body>
+</html>
